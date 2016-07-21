@@ -69,6 +69,8 @@ void Gridworld::initAgents() {
 
 		Agent addAgent;
 		addAgent.setP(pos);
+		addAgent.setCarrying(false);
+		addAgent.setHoldingPOI(NULL);
 		this->agents.push_back(addAgent);
 	}
 }
@@ -224,15 +226,16 @@ void Gridworld::stepAgents(FANN::neural_net* net, double &eps) {
 			int amt = poi->getWeight();
 
 			//  set all their carrying values to false
-			std::cout << "carriers len: " << carriers.size() << std::endl;
+			//std::cout << "carriers len: " << carriers.size() << std::endl;
 			for (auto iter = carriers.begin(); iter != carriers.end(); ++iter) {
-				std::cout << "setting agent to no longer carry" << std::endl;
+				//std::cout << "setting agent to no longer carry" << std::endl;
 				Agent* agent = *iter;
 				agent->setCarrying(false);
 				agent->setHoldingPOI(NULL);
 			}
 			//  increase amount returned home
 			this->home.receiveValues(1);
+			if (this->worldComplete()) break;
 		}
 
 		//  set next position for all cases
@@ -270,6 +273,7 @@ void Gridworld::stepAgents(FANN::neural_net* net, double &eps) {
 			}
 		}
 
+
 		//  check for collisions in new map -- change agent's position if unoccupied
 		//  insert agent to newAgents vector 
 		if (!positionAvailable(nextPos)) {
@@ -295,7 +299,8 @@ void Gridworld::stepAgents(FANN::neural_net* net, double &eps) {
 			//  'remove' from POI table
 			POIit->remove();
 		}
-		else if(!POIit->isRemoved())
+
+		else if (!POIit->isRemoved())
 		{
 			POIit->clearReadyAgents();
 		}
@@ -369,6 +374,7 @@ bool Gridworld::worldComplete()
 	if (this->home.currentAmount() == this->numPOI)
 	{
 		std::cout << "worldComplete: " << this->home.currentAmount() << std::endl;
+		this->printWorld();
 		return true;
 	}
 

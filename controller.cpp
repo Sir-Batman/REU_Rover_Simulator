@@ -7,7 +7,6 @@
 * techniques on neural nets.
 *
 * Copyright (C) 2016 Abby Van Soest, Connor Yates
-
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
@@ -25,20 +24,37 @@
 #include "controller.h"
 #include <cassert>
 
+//  return a semi-random index between 0 and NUM SIMULATIONS - 1
+//  more likely to return indices at the upper end of the array
+int getIndex(int numSims) {
+
+	std::vector<int> probabilities;
+
+	for (int i = 0; i < numSims; i++) {
+		for (int j = 0; j < i; j++) {
+			probabilities.push_back(i);
+		}
+	}
+
+	int random = rand() % probabilities.size();
+
+	return probabilities.at(random);
+}
+
 /* run simulations for the full number of epochs, performing neuro-evolutionary
    techniques between each epoch */ 
 int main(void) {
 	//  control experiment data collection
-	int MAX_STEPS = 600;
+	int MAX_STEPS = 1000;
 	int NUM_SIMULATIONS = 100;
 	int NUM_EPOCHS = 100000;
 	int X_TOP_PERFORMERS = 10;
 	double MUTATION_RATE = .1;  //  number of connections to mutate within a net
-	double PERCENT = .1;       //  percent of total simulations to mutate
+	double PERCENT = .1; 		//  percent of total simulations to mutate
 
 	//  control gridworld
 	int NUMBER_OF_AGENTS = 3;
-	int NUMBER_OF_POI = 2;
+	int NUMBER_OF_POI = 3;
 
 	int WORLD_WIDTH = 6;
 	int WORLD_HEIGHT = 6;
@@ -88,6 +104,8 @@ int main(void) {
 
 	//  for each learning epoch, we run around 10% of the set of simulations and 
 	//  then evolve the population 
+	int totalfailures = 0;
+	int something = 0;
 	std::cout << std::endl;
 	for (int i = 0; i < NUM_EPOCHS; i++) {
 
@@ -101,43 +119,51 @@ int main(void) {
 		//  mutate some new simulations and add them to the simulations population
 		for (int j = 0; j < (int)NUM_SIMULATIONS*PERCENT; j++) {
 
-			int index = rand() % NUM_SIMULATIONS;
+			int index = 0;
+			if (simulations[0].getReward() == simulations[NUM_SIMULATIONS - 1].getReward()) {
+				index = rand() % NUM_SIMULATIONS;
+			}
+			else {
+				index = getIndex(NUM_SIMULATIONS);
+			}
 			Simulation sim = Simulation(simulations[index]);
+			sim.reset();
 			sim.mutate(MUTATION_RATE);
 			sim.runEpoch();
 			
 			simulations.push_back(sim);
-			
-			//  track statistics
-			if (max < sim.getReward()) {
-				max = sim.getReward();
-			}
-			avg += sim.getReward();
-			avgSteps += sim.getSteps();
 		}
 
 		//  remove the lowest performing simulations
-		//  sorted in 
 		std::sort(simulations.begin(), simulations.end());
 		auto loser = simulations.begin();
 		simulations.erase(loser, loser + (int)(NUM_SIMULATIONS*PERCENT));
 
-		// check population size continuity
-		assert(simulations.size() == NUM_SIMULATIONS);
+		//  track statistics
+		int track = 0;
+		for (auto sim = simulations.begin(); sim != simulations.end(); ++sim) {
+			std::cout << "REWARD " << track <<  " is " << sim->getReward() << "\tSTEPS: " << sim->getSteps() << std::endl;
+			track++;
+			if (max < sim->getReward()) {
+				max = sim->getReward();
+			}
+			avg += sim->getReward();
+			avgSteps += sim->getSteps();
+		}		
 
-		avg /= NUM_SIMULATIONS*PERCENT;
-		avgSteps /= NUM_SIMULATIONS*PERCENT;
+		avg /= NUM_SIMULATIONS;
+		avgSteps /= NUM_SIMULATIONS;
 
 		std::cout << "EPOCH AVERAGE " << avg << "\tMAX: " << max << " Avg steps: " << avgSteps << std::endl;//"\tat: " << max_i << std::endl;
 		std::cout << std::endl;
-		
-		for (auto it = simulations.begin(); it != simulations.end(); ++it)
-		{
-			it->reset();
-		}
+
+		if (max == -100) totalfailures++;
+		else something++;
 
 		if (MUTATION_RATE > 0) MUTATION_RATE -= 0.001;
 	}
+
+	std::cout  << "TOTAL FAILURES: " << totalfailures << "\tSOME SORT OF SUCCESS: " << something << std::endl; 
 
 	/* Cleanup configuration memory */
 	delete [] NC.layers;

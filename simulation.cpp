@@ -43,7 +43,7 @@ Simulation::Simulation(struct gridConfig GC, struct netConfig NC, int timesteps)
 	this->net = new FANN::neural_net(NC.net_type, NC.num_layers, NC.layers);
 
 	if (NC.randWeights) { this->net->randomize_weights(NC.randMin, NC.randMax); }
-	this->timesteps = timesteps;
+	this->timesteps = timesteps; 
 	this->reward = 0;
 
 }
@@ -111,12 +111,9 @@ int Simulation::runEpoch()
 			break;
 		}
 		eps -= 0.001;
-		//this->world.clearPOI();
 	}
 
-	// Calculate the reward
-	this->reward -= steps * 0.05;
-	this->reward += 20*this->world.currentAmount();
+	this->reward = this->world.stepsTaken()*(-.05) + 100*this->world.currentAmount();
 
 	return 0;
 }
@@ -126,7 +123,7 @@ int Simulation::getSteps() {
 }
 
 //  return the reward the simulation earned in the epoch
-double Simulation::getReward() const 
+double Simulation::getReward() 
 {
 	return this->reward;
 }
