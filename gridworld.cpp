@@ -28,11 +28,11 @@ int HOME_X = 1;
 int HOME_Y = 1;
 
 // default constructor -- bascially random values
-Gridworld::Gridworld() : Gridworld(2, 1, 5, 5, true) {}
+Gridworld::Gridworld() : Gridworld(2, 1, 5, 5, true, "") {}
 
 //  constructor with arguments provided
 Gridworld::Gridworld(int numAgents, int numPOI, int width, int height, 
-	int weight) {
+	int weight, std::string pickupNet) {
 		
 	this->numAgents = numAgents;
 	this->numPOI = numPOI;
@@ -40,11 +40,17 @@ Gridworld::Gridworld(int numAgents, int numPOI, int width, int height,
 	this->height = height;
 	this->poiWeight = weight;
 
+	std::cout << "hi" << std::endl;
+	bool success = this->pickupNet->create_from_file(pickupNet);
+	if (!success) {
+		std::cout << "ERROR BUILDING PICKUP NET" << std::endl;
+		exit(0);
+	}
+
 	initHome();
 	initAgents();
 	initPOI();
 	this->numSteps = 0;
-	this->goodBroadcasting = false;
 }
 
 //  initialize home base to pre-set global value
@@ -103,6 +109,10 @@ bool Gridworld::positionAvailable(Position p) {
 	if (p.getX() < 0 || p.getX() >= this->width || p.getY() < 0 || p.getY() >= this->height) {
 		return false;
 	}
+	//  homebase has unlimited capacity for agents to fill
+	if (p == this->home.getPosition()) {
+		return true;
+	}
 
 	for (auto it = agents.begin(); it != agents.end(); ++it) {  
 		Position pos = Position(it->getP());
@@ -125,29 +135,23 @@ State Gridworld::getState(Position pos, Agent ag) {
 
 	double agentsA = 0.0, agentsB = 0.0, agentsC = 0.0, agentsD = 0.0;
 	double poiA = 0.0, poiB = 0.0, poiC = 0.0, poiD = 0.0;
-	double broadcastCountA = 0.0, broadcastCountB = 0.0, broadcastCountC = 0.0, broadcastCountD = 0.0;
 
-	// for the given agent, get count of agents and 
-	   // count of broadcasting agents in each quadrant
+	// for the given agent, get count of agents in each quadrant
 	for (auto it = agents.begin(); it != agents.end(); ++it) {  
 		//  values for the comparing agent
 		Position p = Position(it->getP());
 
 		if (p.getX() < pos.getX() && p.getY() >= pos.getY()) {
 			agentsA += 1.0/getDistance(p, pos);
-			if (it->isBroadcasting()) { broadcastCountA++; }
 		}
 		if (p.getX() >= pos.getX() && p.getY() > pos.getY()) {
 			agentsB += 1.0/getDistance(p, pos);
-			if (it->isBroadcasting()) { broadcastCountB++; }
 		}
 		if (p.getX() <= pos.getX() && p.getY() < pos.getY()) {
 			agentsC += 1.0/getDistance(p, pos);
-			if (it->isBroadcasting()) { broadcastCountC++; }
 		}
 		if (p.getX() > pos.getX() && p.getY() <= pos.getY()) {
 			agentsD += 1.0/getDistance(p, pos);
-			if (it->isBroadcasting()) { broadcastCountD++; }
 		}
 	}
 
@@ -175,23 +179,44 @@ State Gridworld::getState(Position pos, Agent ag) {
 	//  information on quadrant 1 
 	state[AGENTS_A] = agentsA;
 	state[POI_A] = poiA;
-	state[BROADCASTING_A] = broadcastCountA;
+
 	//  information on quadrant 2
 	state[AGENTS_B] = agentsB;
 	state[POI_B] = poiB;
-	state[BROADCASTING_B] = broadcastCountB;
+
 	//  information on quadrant 3
 	state[AGENTS_C] = agentsC;
 	state[POI_C] = poiC;
-	state[BROADCASTING_C] = broadcastCountC;
+
 	//  information on quadrant 4
 	state[AGENTS_D] = agentsD;
 	state[POI_D] = poiD;
-	state[BROADCASTING_D] = broadcastCountD;
+
 	// agent carrying information
 	state[CARRYING] = (int)ag.isCarrying();
 
+	state = normalize(state);
+
 	return state;
+}
+
+State Gridworld::normalize(State state) {
+
+	int STATE_LENGTH = 9;
+
+	State normState;
+	double sum = 0.0;
+
+	for (int i = 0; i < STATE_LENGTH; i++) {
+		sum += state[i]*state[i];
+	}
+	double norm = std::sqrt(sum);
+
+	for (int i = 0; i < STATE_LENGTH; i++) {
+		normState[i] = state[i]/norm;
+	}
+
+	return normState;
 }
 
 //  return the distance between points p1 and p2
@@ -204,11 +229,10 @@ double Gridworld::getDistance(Position p1, Position p2) {
 //  step all agents in the world. Reward is not provided here
 void Gridworld::stepAgents(FANN::neural_net* net, double &eps) {
 
-	this->goodBroadcasting = false;
-
 	State state;
 	Position oldPos, nextPos;
 	int index = 1;
+	int action;
 
 	//  iterate through all agents
 	for (auto it = agents.begin(); it != agents.end(); ++it) {
@@ -216,9 +240,14 @@ void Gridworld::stepAgents(FANN::neural_net* net, double &eps) {
 		oldPos = Position(it->getP());
 		state = getState(oldPos, *it);
 		// .1 is a default epsilon value that is a placeholder for now
-		int action = it->nextAction(state, net, oldPos, this->home, eps); 
-		//if (this->numSteps < 10) std::cout << "action " << index << ": " << action << std::endl;
-		index++;
+
+		fann_type* output = this->pickupNet->run( (fann_type*) state.array);
+		if (*output > .9) action = PICKUP;
+
+		else {
+			int action = it->nextAction(state, net, oldPos, this->home, eps); 
+			//std::cout << "action " << action << std::endl;
+		}
 
 		//  set down the POI a group of agents is holding
 		if (action == SET_DOWN && it->getP() == this->home.getPosition()) {
@@ -254,11 +283,6 @@ void Gridworld::stepAgents(FANN::neural_net* net, double &eps) {
 		else if (action == MOVE_UP) {
 			nextPos = Position(oldPos.getX(), oldPos.getY() - 1);
 		}
-		else if (action == BROADCAST) {
-			it->setBroadcast(true);
-			nextPos = oldPos;
-		}
-		else it->setBroadcast(false);  
 
 		if (action == PICKUP) {
 
@@ -273,13 +297,6 @@ void Gridworld::stepAgents(FANN::neural_net* net, double &eps) {
 					//  increment until adequate # agents
 					found->addAvailableAgent(&(*it));
 				}
-			}
-		}
-
-		// set good broadcast if anyone is broadcasting near POI
-		if (action == BROADCAST) {
-			if (findNearbyPOI(nextPos)) {
-				this->goodBroadcasting = true;
 			}
 		}
 
@@ -326,13 +343,17 @@ bool Gridworld::findNearbyPOI(Position pos) {
 	Position checkDown  = Position(pos.getX(), pos.getY() - 1);
 	Position checkRight = Position(pos.getX() - 1, pos.getY());
 	Position checkLeft  = Position(pos.getX() + 1, pos.getY());
+	Position checkUpLeft = Position(pos.getX() - 1, pos.getY() + 1);
+	Position checkDownLeft = Position(pos.getX() + 1, pos.getY() - 1);
+	Position checkUpRight = Position(pos.getX() + 1, pos.getY() + 1);
+	Position checkDownRight = Position(pos.getX() - 1, pos.getY() - 1);
 
 	for (auto it = this->poi.begin(); it != this->poi.end(); ++it) {
 		//  ignore if poi has been marked as complete or removed
 		if (it->isComplete() || it->isRemoved()) continue;
 		Position p = it->getP();
-		if (p == checkUp || p == checkDown 
-			|| p == checkRight || p == checkLeft) {
+		if (p == checkUp || p == checkDown || p == checkRight || p == checkLeft
+			|| p == checkUpLeft || p == checkDownLeft || p == checkUpRight || p == checkDownRight) {
 			return true;
 		}
 	}
@@ -347,11 +368,15 @@ POI* Gridworld::nearbyPOI(Position pos) {
 	Position checkDown  = Position(pos.getX(), pos.getY() - 1);
 	Position checkRight = Position(pos.getX() - 1, pos.getY());
 	Position checkLeft  = Position(pos.getX() + 1, pos.getY());
+	Position checkUpLeft = Position(pos.getX() - 1, pos.getY() + 1);
+	Position checkDownLeft = Position(pos.getX() + 1, pos.getY() - 1);
+	Position checkUpRight = Position(pos.getX() + 1, pos.getY() + 1);
+	Position checkDownRight = Position(pos.getX() - 1, pos.getY() - 1);
 
 	for (auto it = this->poi.begin(); it != this->poi.end(); ++it) {
 		Position p = it->getP();
-		if (p == checkUp || p == checkDown 
-			|| p == checkRight || p == checkLeft) {
+		if (p == checkUp || p == checkDown || p == checkRight || p == checkLeft
+			|| p == checkUpLeft || p == checkDownLeft || p == checkUpRight || p == checkDownRight) {
 			return &(*it);
 		}
 	}
@@ -400,13 +425,12 @@ int Gridworld::currentAmount()
 void Gridworld::printWorld() {
 
 	bool print;
-	bool homePrint;
+	bool homePrint = false;
 
 	for (int i = 0; i < this->height; i++) {
 		for (int j = 0; j < this->width; j++) {
 			Position p = Position(j, i);
 			print = false;
-			homePrint = false;
 
 			for (auto it = agents.begin(); it != agents.end(); ++it) {
 				if (it->getP() == p) {
@@ -457,6 +481,4 @@ void Gridworld::clearPOI()
 	}
 }
 
-bool Gridworld::broadcastAtPOI() {
-	return this->goodBroadcasting;
-}
+

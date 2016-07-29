@@ -26,18 +26,18 @@
 /* Calls the non-default constructors on the members with predetermined, 
  * almost arbitrary values */
 Simulation::Simulation()
-	: world(2, 1, 5, 5, 1)
+	: world(2, 1, 5, 5, 1, "")
 {
 	//std::cout << "call to default constructor" << std::endl;
-	this->net = new FANN::neural_net(FANN::LAYER, 3, (const unsigned int[]) {13,9,6});
+	this->net = new FANN::neural_net(FANN::LAYER, 3, (const unsigned int[]) {13,9,4});
 	this->reward = 0;
 	this->timesteps = 250;
 }
 
 /* This non default constructor uses the information provided by the configuration structs 
  * to call the subsequent non default constructors for the members */
-Simulation::Simulation(struct gridConfig GC, struct netConfig NC, int timesteps)
-	: world(GC.numAgents, GC.numPOI, GC.width, GC.height, GC.poiWeight)
+Simulation::Simulation(struct gridConfig GC, struct netConfig NC, int timesteps, std::string pickupNet)
+	: world(GC.numAgents, GC.numPOI, GC.width, GC.height, GC.poiWeight, pickupNet)
 {
 	//std::cout << "Call to non default constructor" << std::endl;
 	this->net = new FANN::neural_net(NC.net_type, NC.num_layers, NC.layers);
@@ -105,6 +105,38 @@ int Simulation::runEpoch()
 	for (steps = 0; steps < this->timesteps; ++steps)
 	{
 
+		this->world.stepAgents(this->net, eps);
+
+		int check = this->world.currentAmount();
+		if (check > prev) {
+			this->reward += 100;
+			prev = check;
+		}
+	
+		if (this->world.worldComplete())
+		{
+			this->world.printWorld();
+			break;
+		}
+
+		this->reward += (-0.05);
+	}
+
+	return 0;
+}
+
+int Simulation::runEpochAndPrint()
+{
+	int prev = 0;
+	int steps = 0;
+	int count = 0;
+	double eps = 0.1;
+	for (steps = 0; steps < this->timesteps; ++steps)
+	{
+		//if (count < 20) {
+			this->world.printWorld();
+		//	count++;
+		//}
 		this->world.stepAgents(this->net, eps);
 
 		int check = this->world.currentAmount();

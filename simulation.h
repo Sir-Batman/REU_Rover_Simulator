@@ -61,7 +61,7 @@ class Simulation
 	public:
 		//  constructors, destructor, copy constructor
 		Simulation();
-		Simulation(struct gridConfig, struct netConfig, int timesteps);
+		Simulation(struct gridConfig, struct netConfig, int timesteps, std::string pickupNet);
 		~Simulation();
 		Simulation(const Simulation&);
 
@@ -74,6 +74,7 @@ class Simulation
 		void logResults();
 		//  run the simulation in an epoch with a certain number of timesteps
 		int runEpoch();
+		int runEpochAndPrint();
 		//  how many steps the simulation took to complete in the last epoch
 		int getSteps();
 		//  return the simulation's reward from the last epoch

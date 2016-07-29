@@ -45,7 +45,7 @@ private:
 	std::vector<POI> poi;;      //  vector to store all POI
 	Home home;                  //  world's home base
 	int numSteps;               //  number of steps taken in the world
-	bool goodBroadcasting;      //  is any agent broadcasting at a POI?
+	FANN::neural_net* pickupNet;
 
 	//  initialize POI, agents, and home base
 	void initPOI();
@@ -63,12 +63,14 @@ private:
 	POI* nearbyPOI(Position);
 	// clear the gridworld of all agents and POI
 	void clear();
+	//  normalize the state vector 
+	State normalize(State); 
 
 public:
 
 	// constructor
 	Gridworld();
-	Gridworld(int, int, int, int, int);
+	Gridworld(int, int, int, int, int, std::string);
 
 	// step all agents in the world
 	void stepAgents(FANN::neural_net*, double&); 
@@ -92,8 +94,6 @@ public:
 	// list by waiting around
 	void clearPOI();
 
-	//  in the last step, did an agent broadcast at a POI?
-	bool broadcastAtPOI();
 };
 
 #endif

@@ -52,7 +52,7 @@ int getIndex(int numSims, std::vector<Simulation> simulations, int max_steps) {
    techniques between each epoch */ 
 int main(void) {
 	//  control experiment data collection
-	int MAX_STEPS = 1000;
+	int MAX_STEPS = 800;
 	int NUM_SIMULATIONS = 100;
 	int NUM_EPOCHS = 100000;
 	int X_TOP_PERFORMERS = 10;
@@ -87,17 +87,19 @@ int main(void) {
 	NC.net_type = FANN::LAYER;
 	NC.num_layers = NUMBER_OF_LAYERS;
 	NC.layers = new unsigned int[NUMBER_OF_LAYERS];
-	NC.layers[0] = 13;
-	NC.layers[1] = 26;
-	NC.layers[2] = 13;
-	NC.layers[3] = 6;
+	NC.layers[0] = 9;
+	NC.layers[1] = 18;
+	NC.layers[2] = 9;
+	NC.layers[3] = 4;
 	NC.randWeights = RANDOM_WEIGHTS;
 	NC.randMin = RANDOM_NET_MIN;
 	NC.randMax = RANDOM_NET_MAX;
 
 	srand(time(NULL));
 
-	std::vector<Simulation> simulations(NUM_SIMULATIONS, Simulation(GC, NC, MAX_STEPS));
+	std::string pickupNet = "Pickup.net";
+
+	std::vector<Simulation> simulations(NUM_SIMULATIONS, Simulation(GC, NC, MAX_STEPS, pickupNet));
 	//  randomize all nets
 	FANN::neural_net* net;
 	for (auto it = simulations.begin(); it != simulations.end(); ++it) {
@@ -137,7 +139,7 @@ int main(void) {
 			sim.reset();
 			sim.mutate(MUTATION_RATE);
 			sim.runEpoch();
-			
+
 			simulations.push_back(sim);
 		}
 
